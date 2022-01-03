@@ -1,75 +1,46 @@
-# Python CircleCI 2.1 configuration file
-#
-# Check https://circleci.com/docs/2.0/language-python/ for more details
-#
-version: 2.1
+# Java Gradle CircleCI 2.0 configuration file
+# See: https://circleci.com/docs/2.0/language-java/
+version: 2
 
-executors:
-  gitcoin-latest:
-    docker:
-      - image: gitcoin/web:latest
-        environment:
-          CACHE_URL: dbcache://my_cache_table
-          DATABASE_URL: psql://postgres:postgres@localhost/testdb
-          REDIS_URL: rediscache://localhost:6379/0?client_class=django_redis.client.DefaultClient
-          CACHEOPS_REDIS: redis://localhost:6379/0
-          ENV: test
-          COLLECTFAST_CACHE_URL: dbcache://collectfast
-    working_directory: ~/web
-
+# Define a job to be invoked later in a workflow.
+# See: https://circleci.com/docs/2.0/configuration-reference/#jobs
 jobs:
-  test:
-    executor: gitcoin-latest
-    branches:
-      ignore:
-        - gh-pages
+  build:
+    # Specify the execution environment. You can specify an image from Dockerhub or use one of our Convenience Images from CircleCI's Developer Hub.
+    # See: https://circleci.com/docs/2.0/configuration-reference/#docker-machine-macos-windows-executor
     docker:
-      - image: circleci/postgres:10-alpine
-        environment:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: testdb
-      - image: circleci/redis:4-alpine3.8
+      # specify the version you desire here
+      - image: circleci/openjdk:8-jdk
 
+      # Specify service dependencies here if necessary
+      # CircleCI maintains a library of pre-built images
+      # documented at https://circleci.com/docs/2.0/circleci-images/
+      # - image: circleci/postgres:9.4
+
+    working_directory: ~/repo
+
+    environment:
+      # Customize the JVM maximum heap limit
+      JVM_OPTS: -Xmx3200m
+      TERM: dumb
+    # Add steps to the job
+    # See: https://circleci.com/docs/2.0/configuration-reference/#steps
     steps:
       - checkout
 
       # Download and cache dependencies
       - restore_cache:
           keys:
-          - deps37-{{ .Branch }}-{{ checksum "requirements/ci.txt" }}-alpine
-          # fallback to using the latest cache if no exact match is found
-          - deps37-{{ .Branch }}-alpine
+            - v1-dependencies-{{ checksum "build.gradle" }}
+            # fallback to using the latest cache if no exact match is found
+            - v1-dependencies-
 
-      - run:
-          name: install dependencies
-          command: |
-            python -m venv venv
-            echo "Activating virtualenv..."
-            . venv/bin/activate
-            echo "Installing requirements..."
-            pip install -r requirements/test.txt
-            echo "Requirements installed!"
+      - run: gradle dependencies
 
       - save_cache:
-          key: deps37-{{ .Branch }}-{{ checksum "requirements/ci.txt" }}-alpine
           paths:
-            - ./venv
-            - "/usr/local/bin"
-            - "/usr/local/lib/python3.7/site-packages"
+            - ~/.gradle
+          key: v1-dependencies-{{ checksum "build.gradle" }}
 
-      - run:
-          name: run tests
-          command: |
-            echo "Activating environment for tests..."
-            . venv/bin/activate
-            cd ~/web/app
-            echo "Running pytest..."
-            pytest -p no:ethereum
-
-      - store_test_results:
-          path: test-results
-
-      - store_artifacts:
-          path: test-results
-          destination: test-results
+      # run tests!
+      - run: gradle test
